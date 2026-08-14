@@ -1,0 +1,5 @@
+# dsh-vision-plugin bundle patch: registers the vision bridge plugin.
+# Install with `dsh plugin --profile web add <path-or-git-url>`.
+- insert:
+    - id: vision-plugin
+      name: '@dsh-external/dsh-vision-plugin'

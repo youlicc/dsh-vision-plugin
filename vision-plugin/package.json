@@ -1,0 +1,53 @@
+{
+  "name": "@dsh-external/dsh-vision-plugin",
+  "description": "Vision bridge for text-only routes: pasted images become temp-file paths (paste-to-path), and the describe_image tool reads them through a configurable vision provider, returning the description as text.",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-attachment": "*",
+    "@deepseek-ai/dsh-host-webserver": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-attachment": "file:../../deepseek-harness/packages/attachment/attachment",
+    "@deepseek-ai/dsh-host-webserver": "file:../../deepseek-harness/packages/host/webserver",
+    "@deepseek-ai/dsh-llm": "file:../../deepseek-harness/packages/llm/llm",
+    "@deepseek-ai/dsh-tools": "file:../../deepseek-harness/packages/core/tools",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "tsdown": "0.22.14",
+    "vitest": "4.1.10"
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "cordis.patch.yml",
+    "src",
+    "tests",
+    "README.md"
+  ]
+}
