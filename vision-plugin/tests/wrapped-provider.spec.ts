@@ -193,8 +193,10 @@ describe('WrappedVisionAdapter', () => {
   })
 
   it('formats the description text block verbatim', () => {
-    expect(imageDescriptionText('猫.png', '一只猫')).toBe('[图片 猫.png 的识别结果]\n一只猫')
-    expect(imageDescriptionText(undefined, '一只猫')).toBe('[图片 图片 的识别结果]\n一只猫')
+    expect(imageDescriptionText('猫.png', '一只猫', 'sha256:abc'))
+      .toBe('[图片 猫.png 的识别结果（如需复核原图请调用 describe_attachment（attachment_id: sha256:abc），不要搜索本地文件）]\n一只猫')
+    expect(imageDescriptionText(undefined, '一只猫'))
+      .toBe('[图片 图片 的识别结果（无需再寻找或复核本地图片文件）]\n一只猫')
   })
 })
 

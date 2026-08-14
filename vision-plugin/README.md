@@ -6,6 +6,7 @@ Vision bridge for text-only routes: pasted images become temp-file paths (paste-
 
 - **Paste-to-path intake**: the browser half (`client.js`) intercepts image pastes on a capture-phase listener. When the host verdict says the selected model is text-only, the paste is taken over: the bytes upload to `POST /vision-plugin/paste`, land as a private (0600) temp file in a fresh unpredictable temp dir, and the returned path is inserted into the composer as plain text. A text-only model never trips image admission; a vision model keeps its native thumbnail paste (the verdict resolves the selector label against real model metadata, `GET /vision-plugin/paste?model=<label>`).
 - **`describe_image` tool**: reads a local PNG/JPEG/WebP/GIF file (workspace or pasted temp path) with node's own fs, durably commits it through the attachment service, describes it through the vision model chain, and returns the description as text. The image never enters the routed model's request as an image block.
+- **`describe_attachment` tool**: re-reads a durable image by its attachment id (`sha256:…`) straight from the content-addressed attachment store (`$DSH_HOME/attachments/v1/objects/…`), recovers the media type from the bytes, and describes it through the same chain. This is the channel a wrapped-`(vision)` model uses to inspect the original pixels when the auto-description needs verification — the rewrite text carries the attachment id and points the model here instead of searching local files.
 
 ## Config
 

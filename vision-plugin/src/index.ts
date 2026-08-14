@@ -17,6 +17,7 @@ import { DescribeService } from './describe.ts'
 import { applyDescribeImageTool } from './describe-image.ts'
 import { registerPasteRoute } from './paste.ts'
 import { applyWrappedProviders } from './wrapped-provider.ts'
+import { applyDescribeAttachmentTool } from './describe-attachment.ts'
 
 export const name = 'dsh-vision-plugin'
 
@@ -28,10 +29,11 @@ export { Config }
 export function apply(ctx: Context, config: ConfigShape): void {
   const describe = new DescribeService(ctx, config)
 
-  // The tool registers unconditionally; execution re-checks the mounted
+  // The tools register unconditionally; execution re-checks the mounted
   // services defensively, so a store-less deployment fails with a clear tool
   // error instead of a hidden registration gap.
   applyDescribeImageTool(ctx, describe)
+  applyDescribeAttachmentTool(ctx, describe)
 
   // Mirror `(vision)` models for text-only routes: selecting one keeps the
   // native thumbnail paste (image admission passes) while the wrapper

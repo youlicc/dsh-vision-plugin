@@ -5,7 +5,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -91,10 +92,43 @@ async function tempImage(name = 'shot.png'): Promise<string> {
 }
 
 describe('dsh-vision-plugin composition', () => {
-  it('registers the describe_image tool', async () => {
+  it('registers both describe tools', async () => {
     const { ctx } = await harness()
     const names = ctx.tools.schemas().map(schema => schema.name)
     expect(names).toContain('describe_image')
+    expect(names).toContain('describe_attachment')
+    await ctx.fiber.dispose()
+  })
+
+  it('executes describe_attachment over a stored attachment and returns the description envelope', async () => {
+    const { ctx } = await harness()
+    // Seed a real content-addressed attachment under a temp harness home.
+    const home = await mkdtemp(join(tmpdir(), 'dsh-vision-apply-store-'))
+    dirs.push(home)
+    const sha256 = createHash('sha256').update(PNG).digest('hex')
+    const objectDir = join(home, 'attachments', 'v1', 'objects', sha256.slice(0, 2))
+    await mkdir(objectDir, { recursive: true })
+    await writeFile(join(objectDir, sha256), PNG)
+    const previousHome = process.env.DSH_HOME
+    process.env.DSH_HOME = home
+    try {
+      const result = await ctx.tools.execute({
+        signal: new AbortController().signal,
+        callId: CallId('vision-call-attachment'),
+        name: 'describe_attachment',
+        arguments: { attachment_id: `sha256:${sha256}` },
+      })
+      const text = result.content
+        .filter(block => block.type === 'text')
+        .map(block => block.type === 'text' ? block.text : '')
+        .join('')
+      expect(text).toContain('一只猫在草地上晒太阳')
+      expect(text).toContain('<attachment_id>')
+      expect(text).toContain(`sha256:${sha256}`)
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+    }
     await ctx.fiber.dispose()
   })
 

@@ -1,11 +1,11 @@
 import z from "@deepseek-ai/schemastery";
 import { createHash } from "node:crypto";
 import { BlockAssembler, LlmAdapter, LlmError, createUserMessage } from "@deepseek-ai/dsh-llm";
-import { basename, extname, join } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { AttachmentError } from "@deepseek-ai/dsh-attachment";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 const Config = z.object({
 	provider: z.string().default("openrouter"),
 	models: z.array(z.string()).default([...[
@@ -237,7 +237,7 @@ function applyDescribeImageTool(ctx, describe) {
 //#endregion
 //#region src/paste.ts
 /** Magic-byte sniffs for the accepted raster formats, with their extensions. */
-const SNIFFS = [
+const SNIFFS$1 = [
 	{
 		ext: ".png",
 		test: (buffer) => buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([
@@ -274,7 +274,7 @@ const SNIFFS = [
 async function handlePasteBytes(data, maxBytes) {
 	if (data.byteLength > maxBytes) throw new Error(`image over the ${maxBytes}-byte limit`);
 	const buffer = Buffer.from(data);
-	const sniff = SNIFFS.find((candidate) => candidate.test(buffer));
+	const sniff = SNIFFS$1.find((candidate) => candidate.test(buffer));
 	if (sniff === void 0) throw new Error("not a recognized image (png/jpeg/webp/gif)");
 	const file = join(await mkdtemp(join(tmpdir(), "dsh-vision-paste-")), `paste-${Date.now()}${sniff.ext}`);
 	await writeFile(file, buffer, { mode: 384 });
@@ -403,8 +403,8 @@ function registerPasteRoute(ctx, host, config) {
 //#endregion
 //#region src/wrapped-provider.ts
 /** The model-visible text replacing one image block in the delegated request. */
-function imageDescriptionText(name, description) {
-	return `[图片 ${name === void 0 ? "图片" : name} 的识别结果]\n${description}`;
+function imageDescriptionText(name, description, attachmentId) {
+	return `[图片 ${name === void 0 ? "图片" : name} 的识别结果（${attachmentId === void 0 ? "无需再寻找或复核本地图片文件" : `如需复核原图请调用 describe_attachment（attachment_id: ${attachmentId}），不要搜索本地文件`}）]\n${description}`;
 }
 /**
 * The mirror adapter for one real text-only provider. Model metadata
@@ -490,7 +490,7 @@ var WrappedVisionAdapter = class extends LlmAdapter {
 			const description = await this.describeAttachment(block.attachment, signal);
 			out.push({
 				type: "text",
-				text: imageDescriptionText(block.attachment.name, description)
+				text: imageDescriptionText(block.attachment.name, description, String(block.attachment.attachmentId))
 			});
 			changed = true;
 		} else if (block.type === "tool-result") {
@@ -569,6 +569,147 @@ function applyWrappedProviders(ctx, describe, enabled) {
 	};
 }
 //#endregion
+//#region src/attachment-reader.ts
+/**
+* Read one durable image attachment by content address alone. Attachments are
+* content-addressed files under `$DSH_HOME/attachments/v1/objects/<prefix>/<sha256>`
+* without an extension; the reader validates the id format, reads the file,
+* and recovers the media type from the bytes — the pure-plugin counterpart of
+* the (removed) `AttachmentStore.readImageById`, so a model that only knows an
+* attachment id can still re-read the original image.
+* @module @dsh-external/dsh-vision-plugin/attachment-reader
+*/
+const ID_PATTERN = /^sha256:([a-f0-9]{64})$/;
+/** Magic-byte sniffs for the accepted raster formats. */
+const SNIFFS = [
+	{
+		mediaType: "image/png",
+		test: (buffer) => buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([
+			137,
+			80,
+			78,
+			71,
+			13,
+			10,
+			26,
+			10
+		]))
+	},
+	{
+		mediaType: "image/jpeg",
+		test: (buffer) => buffer.length >= 3 && buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255
+	},
+	{
+		mediaType: "image/webp",
+		test: (buffer) => buffer.length >= 12 && buffer.subarray(0, 4).toString("latin1") === "RIFF" && buffer.subarray(8, 12).toString("latin1") === "WEBP"
+	},
+	{
+		mediaType: "image/gif",
+		test: (buffer) => buffer.length >= 6 && buffer.subarray(0, 6).toString("latin1") === "GIF89a"
+	}
+];
+/** Resolve the harness home: `$DSH_HOME` when set, else `~/.dsh`. */
+function defaultHarnessHome() {
+	const fromEnv = process.env.DSH_HOME;
+	return resolve(fromEnv !== void 0 && fromEnv.trim().length > 0 ? fromEnv : join(homedir(), ".dsh"));
+}
+/**
+* Read one durable image by content address.
+* @param attachmentId - the durable `sha256:<hex>` address from the session log.
+* @param home - the harness home to read from (defaults to `$DSH_HOME`/`~/.dsh`).
+* @returns the verified bytes and the recovered media type.
+* @throws when the id is malformed or no object exists at the address.
+*/
+async function readAttachmentById(attachmentId, home = defaultHarnessHome()) {
+	const match = ID_PATTERN.exec(attachmentId);
+	if (match?.[1] === void 0) throw new Error(`invalid attachment id "${attachmentId}": expected sha256:<64 hex digits>`);
+	const sha256 = match[1];
+	const objectPath = join(home, "attachments", "v1", "objects", sha256.slice(0, 2), sha256);
+	let data;
+	try {
+		data = new Uint8Array(await readFile(objectPath));
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") throw new Error(`attachment ${attachmentId} is not stored (${objectPath} missing)`);
+		throw error;
+	}
+	const buffer = Buffer.from(data);
+	const sniff = SNIFFS.find((candidate) => candidate.test(buffer));
+	if (sniff === void 0) throw new Error(`attachment ${attachmentId} is not a recognized image (png/jpeg/webp/gif)`);
+	return {
+		data,
+		mediaType: sniff.mediaType
+	};
+}
+//#endregion
+//#region src/describe-attachment.ts
+/** Default model-facing question for one recognition call. */
+const DEFAULT_QUESTION = "请详细描述这张图片的内容";
+/**
+* Register the `describe_attachment` tool into the given context.
+* @param ctx - the plugin context.
+* @param describe - the shared vision bridge.
+*/
+function applyDescribeAttachmentTool(ctx, describe) {
+	ctx.tools.register(defineTool({
+		name: "describe_attachment",
+		description: "Re-read an attached image by its attachment_id (sha256:…) and describe it using a vision model, returning the description as text. Use when a message references an image by attachment id and you need to inspect its content precisely.",
+		parameters: {
+			attachment_id: {
+				type: "string",
+				required: true,
+				description: "The durable attachment id (sha256:…) carried in the message."
+			},
+			question: {
+				type: "string",
+				description: `Optional question for the vision model; defaults to "${DEFAULT_QUESTION}".`
+			}
+		},
+		output: {
+			schema: {
+				type: "object",
+				additionalProperties: false,
+				properties: {
+					attachmentId: {
+						type: "string",
+						required: true
+					},
+					question: {
+						type: "string",
+						required: true
+					},
+					description: {
+						type: "string",
+						required: true
+					}
+				}
+			},
+			render: (_args, value) => [{
+				type: "text",
+				text: `<attachment_id>${value.attachmentId}</attachment_id>\n<question>${value.question}</question>\n<content>\n${value.description}\n</content>`
+			}]
+		},
+		isConcurrencySafe: () => true,
+		async execute(args, exec) {
+			const attachmentId = args.attachment_id.trim();
+			if (attachmentId.length === 0) throw new Error("attachment_id must be a non-empty string");
+			const question = typeof args.question === "string" && args.question.trim().length > 0 ? args.question.trim() : DEFAULT_QUESTION;
+			const stored = await readAttachmentById(attachmentId);
+			return {
+				attachmentId,
+				question,
+				description: (await describe.describe(stored.data, stored.mediaType, question, void 0, exec.signal)).text
+			};
+		},
+		presentCall(args) {
+			return {
+				card: "generic",
+				title: `Describe image ${args.attachment_id}`,
+				kind: "read"
+			};
+		}
+	}));
+}
+//#endregion
 //#region src/index.ts
 const name = "dsh-vision-plugin";
 /** Services the plugin body reads through the context property proxy. */
@@ -576,6 +717,7 @@ const inject = ["tools", "systemPrompt"];
 function apply(ctx, config) {
 	const describe = new DescribeService(ctx, config);
 	applyDescribeImageTool(ctx, describe);
+	applyDescribeAttachmentTool(ctx, describe);
 	const disposeWrapped = applyWrappedProviders(ctx, describe, config.wrappedModels);
 	ctx.effect(() => disposeWrapped, "dsh-vision-plugin: wrapped vision providers");
 	if (config.pasteToPath) ctx.inject(["webServer"], (scope) => {

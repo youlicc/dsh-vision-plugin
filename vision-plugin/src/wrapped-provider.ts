@@ -23,9 +23,12 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { DescribeService } from './describe.ts'
 
 /** The model-visible text replacing one image block in the delegated request. */
-export function imageDescriptionText(name: string | undefined, description: string): string {
+export function imageDescriptionText(name: string | undefined, description: string, attachmentId?: string): string {
   const label = name === undefined ? '图片' : name
-  return `[图片 ${label} 的识别结果]\n${description}`
+  const guidance = attachmentId === undefined
+    ? '无需再寻找或复核本地图片文件'
+    : `如需复核原图请调用 describe_attachment（attachment_id: ${attachmentId}），不要搜索本地文件`
+  return `[图片 ${label} 的识别结果（${guidance}）]\n${description}`
 }
 
 /**
@@ -123,7 +126,7 @@ export class WrappedVisionAdapter extends LlmAdapter {
     for (const block of blocks) {
       if (block.type === 'image') {
         const description = await this.describeAttachment(block.attachment, signal)
-        out.push({ type: 'text', text: imageDescriptionText(block.attachment.name, description) })
+        out.push({ type: 'text', text: imageDescriptionText(block.attachment.name, description, String(block.attachment.attachmentId)) })
         changed = true
       } else if (block.type === 'tool-result') {
         const content = await this.rewriteBlocks(block.content, signal)
