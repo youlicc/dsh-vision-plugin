@@ -54,6 +54,7 @@ const CONFIG = {
   timeoutMs: 1000,
   maxInputBytes: 0,
   pasteMaxBytes: 1024,
+  pasteRetentionMs: 86400000,
   pasteToPath: true,
   wrappedModels: true,
 }

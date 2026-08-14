@@ -2,7 +2,7 @@ import z from "@deepseek-ai/schemastery";
 import { createHash } from "node:crypto";
 import { BlockAssembler, LlmAdapter, LlmError, createUserMessage } from "@deepseek-ai/dsh-llm";
 import { basename, extname, join } from "node:path";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { AttachmentError } from "@deepseek-ai/dsh-attachment";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { tmpdir } from "node:os";
@@ -19,6 +19,7 @@ const Config = z.object({
 	timeoutMs: z.natural().default(6e4),
 	maxInputBytes: z.natural().default(0),
 	pasteMaxBytes: z.natural().default(20 * 1024 * 1024),
+	pasteRetentionMs: z.natural().default(1440 * 60 * 1e3),
 	pasteToPath: z.boolean().default(true),
 	wrappedModels: z.boolean().default(true)
 });
@@ -275,9 +276,42 @@ async function handlePasteBytes(data, maxBytes) {
 	const buffer = Buffer.from(data);
 	const sniff = SNIFFS.find((candidate) => candidate.test(buffer));
 	if (sniff === void 0) throw new Error("not a recognized image (png/jpeg/webp/gif)");
-	const file = join(await mkdtemp(join(tmpdir(), "dsh-vision-paste-")), `paste${sniff.ext}`);
+	const file = join(await mkdtemp(join(tmpdir(), "dsh-vision-paste-")), `paste-${Date.now()}${sniff.ext}`);
 	await writeFile(file, buffer, { mode: 384 });
 	return file;
+}
+/** The temp-dir prefix owned by this plugin's paste intake. */
+const PASTE_PREFIX = "dsh-vision-paste-";
+/**
+* Delete every paste temp directory whose files are older than the retention
+* window. Pastes are one-shot inputs: once the path text reached the composer
+* the directory has no further use, so leaving it behind would accumulate
+* stale images that an agent searching for "the current paste" can mistake
+* for a fresh one.
+* @param retentionMs - directories whose newest file is older than this are removed.
+* @param root - the temp root to sweep (defaults to the OS temp dir).
+* @returns the number of removed directories.
+*/
+async function cleanupStalePasteDirs(retentionMs, root = tmpdir()) {
+	const cutoff = Date.now() - retentionMs;
+	let removed = 0;
+	for (const entry of await readdir(root, { withFileTypes: true })) {
+		if (!entry.isDirectory() || !entry.name.startsWith(PASTE_PREFIX)) continue;
+		const dir = join(root, entry.name);
+		let newest = 0;
+		for (const file of await readdir(dir)) try {
+			const stat$1 = await stat(join(dir, file));
+			if (stat$1.mtimeMs > newest) newest = stat$1.mtimeMs;
+		} catch {}
+		if (newest < cutoff) {
+			await rm(dir, {
+				recursive: true,
+				force: true
+			});
+			removed += 1;
+		}
+	}
+	return removed;
 }
 /**
 * Whether the client should take a paste over for the currently selected
@@ -321,6 +355,7 @@ function registerPasteRoute(ctx, host, config) {
 	if (!config.pasteToPath) return;
 	const webServer = ctx.get("webServer");
 	if (webServer === void 0) return;
+	cleanupStalePasteDirs(config.pasteRetentionMs);
 	webServer.register({
 		kind: "exact",
 		path: "/vision-plugin/paste",
@@ -355,6 +390,7 @@ function registerPasteRoute(ctx, host, config) {
 					chunks.push(chunk);
 				}
 				const path = await handlePasteBytes(Buffer.concat(chunks), config.pasteMaxBytes);
+				cleanupStalePasteDirs(config.pasteRetentionMs);
 				res.writeHead(200, { "content-type": "application/json" });
 				res.end(JSON.stringify({ path }));
 			} catch (error) {

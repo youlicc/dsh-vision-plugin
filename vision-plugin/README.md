@@ -18,6 +18,7 @@ Plugin entry `config` (cordis.yml / settings), all optional:
 | `systemPrompt` | Chinese describe prompt | System prompt for the vision call. |
 | `pasteToPath` | `true` | Browser paste interception on/off. |
 | `pasteMaxBytes` | 20 MiB | Upload cap for the paste endpoint. |
+| `pasteRetentionMs` | 24h | Paste temp dirs older than this are swept. |
 | `maxOutputTokens` | 2048 | Output cap per vision call. |
 | `timeoutMs` | 60000 | Per-model call timeout. |
 | `maxInputBytes` | 0 (attachment limit) | Byte cap for one described image. |
@@ -28,6 +29,12 @@ Plugin entry `config` (cordis.yml / settings), all optional:
 - Recognition is deduplicated in-flight per image bytes; identical concurrent calls share one vision request.
 - The paste route mounts only when a web server is present (`ctx.inject(['webServer'])`): headless deployments stay a tool-only bridge.
 - No dsh source changes are required: the plugin consumes only public services (`ctx.llm`, `ctx.attachments`, `ctx.tools`, `ctx.webServer`).
+
+## Paste temp files: lifecycle and selection
+
+- Pasted images land in a private (0600) dir `dsh-vision-paste-<random>/paste-<epoch-ms>.<ext>` under the OS temp dir; the path text in the composer is the only reference the model needs.
+- These dirs are **one-shot inputs**: `cleanupStalePasteDirs` sweeps any `dsh-vision-paste-*` dir whose newest file is older than `pasteRetentionMs` (default 24h), run at mount and after every accepted paste. Stale images never accumulate in TEMP, so an agent searching for "the current paste" cannot mistake an old one for a fresh paste.
+- Selection principle when a model needs to re-read the image behind a wrapped-`(vision)` message (no path in the log): prefer the **newest** `dsh-vision-paste-*` dir; the most accurate choice is the dir whose creation time is **closest to the message's timestamp** — pastes map one-to-one to messages, so time alignment excludes older residue.
 
 ## Model Experience
 

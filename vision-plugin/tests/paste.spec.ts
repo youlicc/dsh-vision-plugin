@@ -4,11 +4,13 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { readFile, rm, stat } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { LlmModelInfo } from '@deepseek-ai/dsh-llm'
-import { handlePasteBytes, pasteTakeoverVerdict } from '../src/paste.ts'
+import { cleanupStalePasteDirs, handlePasteBytes, pasteTakeoverVerdict } from '../src/paste.ts'
 
 /** 1x1 PNG (valid signature, IHDR, IDAT). */
 const PNG = Uint8Array.from(Buffer.from(
@@ -25,7 +27,7 @@ describe('handlePasteBytes', () => {
   it.skipIf(process.platform === 'win32')('persists a sniffed image as a private temp file and returns its path', async () => {
     const path = await handlePasteBytes(PNG, 1024)
     dirs.push(path)
-    expect(path).toMatch(/dsh-vision-paste-.*\\paste\.png$/)
+    expect(path).toMatch(/dsh-vision-paste-.*\\paste-\d+\.png$/)
     const data = await readFile(path)
     expect([...data]).toEqual([...PNG])
     const mode = (await stat(path)).mode
@@ -52,7 +54,7 @@ describe('handlePasteBytes', () => {
     for (const [bytes, suffix] of [[jpeg, '.jpg'], [webp, '.webp'], [gif, '.gif']] as const) {
       const path = await handlePasteBytes(bytes as Uint8Array, 1024)
       dirs.push(path)
-      expect(path).toMatch(new RegExp(`paste\\${suffix}$`))
+      expect(path).toMatch(new RegExp(`paste-\\d+\\${suffix}$`))
     }
   })
 })
@@ -120,5 +122,46 @@ describe('pasteTakeoverVerdict', () => {
     ])
     await expect(pasteTakeoverVerdict(ctx, 'Legacy Chat')).resolves.toBe(false)
     await ctx.fiber.dispose()
+  })
+})
+
+describe('cleanupStalePasteDirs', () => {
+  it('removes only paste dirs whose files are older than the retention window', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-vision-sweep-'))
+    dirs.push(root)
+    const oldDir = join(root, 'dsh-vision-paste-old')
+    const freshDir = join(root, 'dsh-vision-paste-fresh')
+    const otherDir = join(root, 'other-app')
+    await mkdir(oldDir, { recursive: true })
+    await mkdir(freshDir, { recursive: true })
+    await mkdir(otherDir, { recursive: true })
+    await writeFile(join(oldDir, 'paste.png'), PNG)
+    await writeFile(join(freshDir, 'paste.png'), PNG)
+    await writeFile(join(otherDir, 'data.txt'), 'x')
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    await utimes(join(oldDir, 'paste.png'), old, old)
+
+    const removed = await cleanupStalePasteDirs(60 * 60 * 1000, root)
+
+    expect(removed).toBe(1)
+    await expect(access(join(oldDir, 'paste.png'))).rejects.toThrow()
+    await expect(access(join(freshDir, 'paste.png'))).resolves.toBeUndefined()
+    await expect(access(join(otherDir, 'data.txt'))).resolves.toBeUndefined()
+  })
+
+  it('removes empty paste dirs (failed or interrupted uploads) and ignores unrelated directories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-vision-sweep2-'))
+    dirs.push(root)
+    const empty = join(root, 'dsh-vision-paste-empty')
+    await mkdir(empty, { recursive: true })
+    const other = join(root, 'other-app')
+    await mkdir(other, { recursive: true })
+    await writeFile(join(other, 'data.txt'), 'x')
+    const removed = await cleanupStalePasteDirs(1000, root)
+    // The empty paste dir is swept too (an upload that never wrote a file is
+    // pure residue); the unrelated directory is left alone.
+    expect(removed).toBe(1)
+    await expect(access(empty)).rejects.toThrow()
+    await expect(access(join(other, 'data.txt'))).resolves.toBeUndefined()
   })
 })

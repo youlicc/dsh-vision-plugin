@@ -32,6 +32,8 @@ export interface Config {
   readonly maxInputBytes: number
   /** Maximum bytes accepted by the paste-to-path upload endpoint. */
   readonly pasteMaxBytes: number
+  /** Paste temp directories older than this are swept (one-shot inputs). */
+  readonly pasteRetentionMs: number
   /** Whether the client paste interception (paste-to-path) is enabled. */
   readonly pasteToPath: boolean
   /** Whether text-only provider routes get `(vision)` mirror models (thumbnail paste). */
@@ -48,6 +50,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.natural().default(60_000),
   maxInputBytes: z.natural().default(0),
   pasteMaxBytes: z.natural().default(20 * 1024 * 1024),
+  pasteRetentionMs: z.natural().default(24 * 60 * 60 * 1000),
   pasteToPath: z.boolean().default(true),
   wrappedModels: z.boolean().default(true),
 })

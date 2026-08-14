@@ -10,7 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat as statFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,9 +41,45 @@ export async function handlePasteBytes(data: Uint8Array, maxBytes: number): Prom
     throw new Error('not a recognized image (png/jpeg/webp/gif)')
   }
   const dir = await mkdtemp(join(tmpdir(), 'dsh-vision-paste-'))
-  const file = join(dir, `paste${sniff.ext}`)
+  const file = join(dir, `paste-${Date.now()}${sniff.ext}`)
   await writeFile(file, buffer, { mode: 0o600 })
   return file
+}
+
+/** The temp-dir prefix owned by this plugin's paste intake. */
+const PASTE_PREFIX = 'dsh-vision-paste-'
+
+/**
+ * Delete every paste temp directory whose files are older than the retention
+ * window. Pastes are one-shot inputs: once the path text reached the composer
+ * the directory has no further use, so leaving it behind would accumulate
+ * stale images that an agent searching for "the current paste" can mistake
+ * for a fresh one.
+ * @param retentionMs - directories whose newest file is older than this are removed.
+ * @param root - the temp root to sweep (defaults to the OS temp dir).
+ * @returns the number of removed directories.
+ */
+export async function cleanupStalePasteDirs(retentionMs: number, root = tmpdir()): Promise<number> {
+  const cutoff = Date.now() - retentionMs
+  let removed = 0
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(PASTE_PREFIX)) continue
+    const dir = join(root, entry.name)
+    let newest = 0
+    for (const file of await readdir(dir)) {
+      try {
+        const stat = await statFile(join(dir, file))
+        if (stat.mtimeMs > newest) newest = stat.mtimeMs
+      } catch {
+        // A file vanishing mid-scan is fine; the directory age decides below.
+      }
+    }
+    if (newest < cutoff) {
+      await rm(dir, { recursive: true, force: true })
+      removed += 1
+    }
+  }
+  return removed
 }
 
 /**
@@ -91,6 +127,9 @@ export function registerPasteRoute(ctx: Context, host: Context, config: Config):
   if (!config.pasteToPath) return
   const webServer = ctx.get('webServer')
   if (webServer === undefined) return
+  // Sweep stale paste dirs at mount (previous runs may have left some) and
+  // after every accepted paste.
+  void cleanupStalePasteDirs(config.pasteRetentionMs)
   webServer.register({
     kind: 'exact',
     path: '/vision-plugin/paste',
@@ -125,6 +164,7 @@ export function registerPasteRoute(ctx: Context, host: Context, config: Config):
           chunks.push(chunk)
         }
         const path = await handlePasteBytes(Buffer.concat(chunks), config.pasteMaxBytes)
+        void cleanupStalePasteDirs(config.pasteRetentionMs)
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ path }))
       } catch (error: unknown) {
