@@ -121,24 +121,55 @@ export class WrappedVisionAdapter extends LlmAdapter {
     blocks: readonly ContentBlock[],
     signal?: AbortSignal,
   ): Promise<ContentBlock[]> {
+    // Kick off every top-level image recognition in parallel: the vision
+    // chain is the long pole (free models queue 30-80s), and serializing N
+    // images made a multi-image message stall for N times that before the
+    // first token. A failed recognition degrades to a placeholder instead of
+    // failing the whole request.
+    const imageTasks: { index: number; promise: Promise<string> }[] = []
+    for (let index = 0; index < blocks.length; index += 1) {
+      const block = blocks[index]!
+      if (block.type === 'image' && block.attachment !== undefined) {
+        imageTasks.push({
+          index,
+          promise: this.describeAttachment(block.attachment, signal),
+        })
+      }
+    }
+    const descriptions = new Map<number, string>()
+    if (imageTasks.length > 0) {
+      const settled = await Promise.allSettled(imageTasks.map(task => task.promise))
+      for (let i = 0; i < settled.length; i += 1) {
+        const outcome = settled[i]
+        if (outcome === undefined) continue
+        if (outcome.status === 'fulfilled') descriptions.set(imageTasks[i]!.index, outcome.value)
+        else {
+          descriptions.set(imageTasks[i]!.index, `（图片识别失败：${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}）`)
+        }
+      }
+    }
+
     let changed = false
     const out: ContentBlock[] = []
-    for (const block of blocks) {
-      if (block.type === 'image') {
-        const description = await this.describeAttachment(block.attachment, signal)
-        out.push({ type: 'text', text: imageDescriptionText(block.attachment.name, description, String(block.attachment.attachmentId)) })
-        changed = true
-      } else if (block.type === 'tool-result') {
+    for (let index = 0; index < blocks.length; index += 1) {
+      const block = blocks[index]!
+      if (block.type === 'image' && block.attachment !== undefined) {
+        const description = descriptions.get(index)
+        if (description !== undefined) {
+          out.push({ type: 'text', text: imageDescriptionText(block.attachment.name, description, String(block.attachment.attachmentId)) })
+          changed = true
+          continue
+        }
+      }
+      if (block.type === 'tool-result' && block.content !== undefined) {
         const content = await this.rewriteBlocks(block.content, signal)
         if (content !== block.content) {
           out.push({ ...block, content })
           changed = true
-        } else {
-          out.push(block)
+          continue
         }
-      } else {
-        out.push(block)
       }
+      out.push(block)
     }
     return changed ? out : [...blocks]
   }

@@ -28,6 +28,7 @@ Plugin entry `config` (cordis.yml / settings), all optional:
 
 - Provider/model are plain configuration: switching to SiliconFlow, Anthropic, or a local Ollama route is a config change, never a code change. The only constraint is that the vision route lives on the pi-ai adapter family (the DeepSeek official adapter is text-only).
 - Recognition is deduplicated in-flight per image bytes; identical concurrent calls share one vision request.
+- **Multi-image messages recognize in parallel**: a wrapped-`(vision)` turn with N images fires the N recognition calls concurrently, so the pre-token stall scales with one recognition (free models queue 30-80s), not N. A single failed recognition degrades to an inline placeholder instead of failing the request.
 - The paste route mounts only when a web server is present (`ctx.inject(['webServer'])`): headless deployments stay a tool-only bridge.
 - No dsh source changes are required: the plugin consumes only public services (`ctx.llm`, `ctx.attachments`, `ctx.tools`, `ctx.webServer`).
 

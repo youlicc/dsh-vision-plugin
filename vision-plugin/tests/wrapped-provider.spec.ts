@@ -25,6 +25,12 @@ const PNG = Uint8Array.from(Buffer.from(
   'base64',
 ))
 
+/** 3x3 PNG, different bytes from {@link PNG} so content addressing keeps them apart. */
+const PNG3 = Uint8Array.from(Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAIAAADZSiLoAAAAEElEQVR4nGP4z8AAQQxYWACPjgj4kWPEuQAAAABJRU5ErkJggg==',
+  'base64',
+))
+
 const CONFIG = {
   provider: 'vision',
   models: ['vision-model'],
@@ -78,12 +84,17 @@ class RecordAdapter extends LlmAdapter {
 class VisionAdapter extends LlmAdapter {
   calls = 0
 
+  constructor(private readonly delayMs = 0) {
+    super()
+  }
+
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
   }
 
   override async *stream(): AsyncIterable<StreamChunk> {
     this.calls += 1
+    if (this.delayMs > 0) await new Promise(resolve => setTimeout(resolve, this.delayMs))
     const text = '一只猫在草地上'
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text }
@@ -103,13 +114,13 @@ afterEach(async () => {
   await Promise.all(homes.splice(0).map(path => rm(path, { recursive: true, force: true })))
 })
 
-async function harness() {
+async function harness(visionDelayMs = 0) {
   const home = await mkdtemp(join(tmpdir(), 'dsh-vision-wrap-'))
   homes.push(home)
   const ctx = new Context()
   void new LlmRuntime(ctx)
   ctx.llm.registerAdapter(['text-route'], new RecordAdapter(TEXT_MODELS))
-  const vision = new VisionAdapter()
+  const vision = new VisionAdapter(visionDelayMs)
   ctx.llm.registerAdapter(['vision'], vision)
   await ctx.plugin(LocalAttachmentStore, { dshHome: home, maxImageBytes: 4096 })
   const describe = new DescribeService(ctx, CONFIG)
@@ -169,6 +180,30 @@ describe('WrappedVisionAdapter', () => {
     })) chunks.push(chunk)
     expect(vision.calls).toBe(1)
     expect(chunks.some(chunk => chunk.type === 'text-delta')).toBe(true)
+    await ctx.fiber.dispose()
+  })
+
+  it('recognizes multiple images in parallel, not serially', async () => {
+    const { ctx, describe, vision } = await harness(60)
+    const first = await ctx.attachments.saveImage({ data: PNG, mediaType: 'image/png', name: 'a.png' })
+    const second = await ctx.attachments.saveImage({ data: PNG3, mediaType: 'image/png', name: 'b.png' })
+    const adapter = new WrappedVisionAdapter(ctx, describe, 'text-route')
+    const message = createUserMessage({
+      content: [
+        { type: 'image', attachment: first },
+        { type: 'image', attachment: second },
+      ],
+      source: { kind: 'user' },
+    })
+    const started = Date.now()
+    const chunks: StreamChunk[] = []
+    for await (const chunk of adapter.stream({
+      provider: 'text-route-vision', model: 'deepseek-chat', messages: [message],
+    })) chunks.push(chunk)
+    const elapsed = Date.now() - started
+    // Serial would take ~120ms (2 x 60ms); parallel stays near one pass.
+    expect(vision.calls).toBe(2)
+    expect(elapsed).toBeLessThan(110)
     await ctx.fiber.dispose()
   })
 

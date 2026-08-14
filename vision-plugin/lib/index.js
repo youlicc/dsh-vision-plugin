@@ -484,25 +484,52 @@ var WrappedVisionAdapter = class extends LlmAdapter {
 		return changed ? out : [...messages];
 	}
 	async rewriteBlocks(blocks, signal) {
+		const imageTasks = [];
+		for (let index = 0; index < blocks.length; index += 1) {
+			const block = blocks[index];
+			if (block.type === "image" && block.attachment !== void 0) imageTasks.push({
+				index,
+				promise: this.describeAttachment(block.attachment, signal)
+			});
+		}
+		const descriptions = /* @__PURE__ */ new Map();
+		if (imageTasks.length > 0) {
+			const settled = await Promise.allSettled(imageTasks.map((task) => task.promise));
+			for (let i = 0; i < settled.length; i += 1) {
+				const outcome = settled[i];
+				if (outcome === void 0) continue;
+				if (outcome.status === "fulfilled") descriptions.set(imageTasks[i].index, outcome.value);
+				else descriptions.set(imageTasks[i].index, `（图片识别失败：${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}）`);
+			}
+		}
 		let changed = false;
 		const out = [];
-		for (const block of blocks) if (block.type === "image") {
-			const description = await this.describeAttachment(block.attachment, signal);
-			out.push({
-				type: "text",
-				text: imageDescriptionText(block.attachment.name, description, String(block.attachment.attachmentId))
-			});
-			changed = true;
-		} else if (block.type === "tool-result") {
-			const content = await this.rewriteBlocks(block.content, signal);
-			if (content !== block.content) {
-				out.push({
-					...block,
-					content
-				});
-				changed = true;
-			} else out.push(block);
-		} else out.push(block);
+		for (let index = 0; index < blocks.length; index += 1) {
+			const block = blocks[index];
+			if (block.type === "image" && block.attachment !== void 0) {
+				const description = descriptions.get(index);
+				if (description !== void 0) {
+					out.push({
+						type: "text",
+						text: imageDescriptionText(block.attachment.name, description, String(block.attachment.attachmentId))
+					});
+					changed = true;
+					continue;
+				}
+			}
+			if (block.type === "tool-result" && block.content !== void 0) {
+				const content = await this.rewriteBlocks(block.content, signal);
+				if (content !== block.content) {
+					out.push({
+						...block,
+						content
+					});
+					changed = true;
+					continue;
+				}
+			}
+			out.push(block);
+		}
 		return changed ? out : [...blocks];
 	}
 	/** Describe one durable attachment, caching by content address. */
