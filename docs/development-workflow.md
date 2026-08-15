@@ -7,7 +7,8 @@
 1. **master 不直接开发**：每个功能/修复在独立分支上开发。
 2. **每个 feature 一个 PR**：PR 合入 master 前经 GitHub 的 pull_request 规则校验（无需审批人，规则仅保证走 PR 通道）。
 3. **squash merge**：合并时把 feature 分支的全部 commit 压缩为一个（合并设置允许 merge/squash/rebase，统一用 squash 保持 master 线性历史）。
-4. **分支命名**：`feat/<描述>`、`fix/<描述>`、`chore/<描述>`、`docs/<描述>`。
+4. **合并是人工决策点**：agent/自动化只创建 PR 并等待，**绝不自动 merge**——必须由 owner 明确指示"合入"后才执行 squash 合入。
+5. **分支命名**：`feat/<描述>`、`fix/<描述>`、`chore/<描述>`、`docs/<描述>`。
 
 ## 流程（每个 feature）
 
@@ -34,7 +35,9 @@ git push -u origin feat/my-feature
 gh pr create --base master --head feat/my-feature --title "feat: ..." --body "..."
 ```
 
-### 4. squash 合入
+> **合并由人工决策**：PR 创建后**不自动合并**——等 owner 审阅并明确指示（手动或自动合入）后再执行下一步。
+
+### 4. squash 合入（等 owner 指示后执行）
 
 ```sh
 # 合入（squash），并删除远程分支
