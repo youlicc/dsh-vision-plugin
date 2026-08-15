@@ -16,9 +16,14 @@ dsh-vision-plugin/
   docs/vision-lazy-design.md   # 完整设计文档（含 A 式→B 式演进记录）
   docs/development-plan-vision-menu.md  # 视觉模型菜单实施计划（已实施）
   docs/migration-plan-client-ts.md      # client 迁移 TS + clientBundle 计划（已实施）
+  docs/plugin-engineering-retrospective.md  # 插件工程化复盘（demo → 自包含的完整方法论）
+  skills/dsh-plugin-engineering/       # 可复用 skill：渐进式披露的插件工程化指南
+    SKILL.md                           # 主文档（五阶段路径）
+    references/gotchas.md              # 踩坑速查
+    references/checklist.md            # 各阶段检查清单
   vision-plugin/               # 插件包 @dsh-external/dsh-vision-plugin
     src/                       # host 侧：paste 端点 + 识图服务 + describe_image 工具 + 视觉模型菜单端点
-    src/client/                # browser 侧：React 组件 + 粘贴拦截（TS，经 clientBundle 编译）
+    src/client/                # browser 侧：React 组件 + 粘贴拦截（TS，经本地 clientBundle 配置编译）
     tests/                     # host 单测 + client 组件测试（62 用例）
     lib/                       # 构建产物：lib/index.js（host）+ lib/client.js（browser bundle）
     cordis.patch.yml           # bundle 注册
