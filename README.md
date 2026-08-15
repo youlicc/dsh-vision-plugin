@@ -33,6 +33,10 @@ dsh-vision-plugin/
 - 视觉调用走 `ctx.llm` 通用 seam：provider/model 全部配置化，默认 OpenRouter + 4 个免费视觉模型回退链（`google/gemma-4-31b-it:free` 等），可换成任何已注册路由（SiliconFlow、Anthropic、本地 Ollama…）。
 - **composer 视觉模型菜单**：不配置 `provider/models` 时，识图路由由菜单选择决定——菜单只显示**已配置供应商**的**免费**视觉模型（插件内置 `FREE_VISION_MODELS` 清单：OpenRouter 4 个 `:free` + OpenCode `mimo-v2.5-free`），默认选中清单顺序第一个，点击即切换；无可用免费模型时按钮隐藏。
 
+## 开发工作流
+
+本仓库遵循 **feature 分支 → PR → squash merge** 流程：master 受 GitHub ruleset 保护（强制 PR、禁 force push、禁删除），日常开发在独立分支进行，合入时 squash 为单个 commit。完整流程与命令见 [`docs/development-workflow.md`](docs/development-workflow.md)。
+
 ## 安装与配置
 
 ```sh
