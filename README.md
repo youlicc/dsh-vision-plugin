@@ -17,10 +17,6 @@ dsh-vision-plugin/
   docs/development-plan-vision-menu.md  # 视觉模型菜单实施计划（已实施）
   docs/migration-plan-client-ts.md      # client 迁移 TS + clientBundle 计划（已实施）
   docs/plugin-engineering-retrospective.md  # 插件工程化复盘（demo → 自包含的完整方法论）
-  skills/dsh-plugin-engineering/       # 可复用 skill：渐进式披露的插件工程化指南
-    SKILL.md                           # 主文档（五阶段路径）
-    references/gotchas.md              # 踩坑速查
-    references/checklist.md            # 各阶段检查清单
   vision-plugin/               # 插件包 @dsh-external/dsh-vision-plugin
     src/                       # host 侧：paste 端点 + 识图服务 + describe_image 工具 + 视觉模型菜单端点
     src/client/                # browser 侧：React 组件 + 粘贴拦截（TS，经本地 clientBundle 配置编译）
@@ -28,6 +24,8 @@ dsh-vision-plugin/
     lib/                       # 构建产物：lib/index.js（host）+ lib/client.js（browser bundle）
     cordis.patch.yml           # bundle 注册
 ```
+
+> 配套的通用技能 `dsh-plugin-engineering`（渐进式披露的插件工程化指南）位于开发环境技能目录：`<dev-root>/.agents/skills/dsh-plugin-engineering/`（本仓库之外的共享位置，供所有 dsh 插件开发使用）。
 
 ## 依赖关系
 
