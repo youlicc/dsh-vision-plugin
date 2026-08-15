@@ -1,0 +1,150 @@
+/* Vision-model menu surface. Tokens mirror the shipped Menu primitive
+ * (ui-primitives) and the model select's dropdown so every composer popup
+ * reads as the same material; the panel opens UPWARD from the tool row.
+ *
+ * Font discipline: the trigger declares NO font-* here. The model select's
+ * `.trigger` declares none either, and skins that restyle the composer
+ * trigger row target `[class*='trailing'] button[aria-haspopup='menu']` —
+ * which matches BOTH buttons — so the skin's font-family/size/weight land
+ * identically on the two. An inline font-* (or a class that outranks the
+ * skin) would drift this button from the model select; observed with the
+ * maid-atelier skin: it sets 600, the old inline 500 won. */
+
+.root {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  min-width: 0;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: none;
+  border-radius: 24px;
+  outline: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  background: transparent;
+}
+
+.trigger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.triggerLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-caption);
+}
+
+.panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: min(280px, calc(100vw - 32px));
+  max-height: min(360px, calc(100vh - 96px));
+  overflow: hidden;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+  color: var(--dsw-alias-label-primary);
+}
+
+.list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.groupTitle {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 5px 8px 3px;
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+}
+
+.option:hover:not(:disabled),
+.option:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Selected cell: the theme's interactive-accent wash (0.14 light / 0.24 dark
+ * — plainly DEEPER than the 0.06/0.08 hover wash) plus a bluish-400 rim, so
+ * the current selection never loses to a hovered row. */
+.selected,
+.selected:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  box-shadow: inset 0 0 0 1px var(--dsw-static-neutral-bluish-400);
+}
+
+.optionName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.status {
+  padding: 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.error {
+  margin-bottom: 4px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}

@@ -5,7 +5,7 @@ Vision bridge for text-only routes: pasted images become temp-file paths (paste-
 ## What it does
 
 - **Vision-model menu (composer)**: a `视觉：<模型>` button in the composer tool row (the `conversation.input.right` seat, right before the send button) opens a provider-grouped dropdown of the **free** vision models offered by the currently configured providers. The free list is the plugin-maintained `FREE_VISION_MODELS` catalog (never scanned from model metadata): OpenRouter's four `:free` models and OpenCode's `mimo-v2.5-free`. The default selection is the first offered model in catalog order; clicking a model switches the vision route for the next recognition. No configured provider offering a free model → the button is hidden entirely.
-- **Paste-to-path intake**: the browser half (`client.js`) intercepts image pastes on a capture-phase listener. When the host verdict says the selected model is text-only, the paste is taken over: the bytes upload to `POST /vision-plugin/paste`, land as a private (0600) temp file in a fresh unpredictable temp dir, and the returned path is inserted into the composer as plain text. A text-only model never trips image admission; a vision model keeps its native thumbnail paste (the verdict resolves the selector label against real model metadata, `GET /vision-plugin/paste?model=<label>`).
+- **Paste-to-path intake**: the browser half (`lib/client.js`) intercepts image pastes on a capture-phase listener. When the host verdict says the selected model is text-only, the paste is taken over: the bytes upload to `POST /vision-plugin/paste`, land as a private (0600) temp file in a fresh unpredictable temp dir, and the returned path is inserted into the composer as plain text. A text-only model never trips image admission; a vision model keeps its native thumbnail paste (the verdict resolves the selector label against real model metadata, `GET /vision-plugin/paste?model=<label>`).
 - **`describe_image` tool**: reads a local PNG/JPEG/WebP/GIF file (workspace or pasted temp path) with node's own fs, durably commits it through the attachment service, describes it through the vision model chain, and returns the description as text. The image never enters the routed model's request as an image block.
 - **`describe_attachment` tool**: re-reads a durable image by its attachment id (`sha256:…`) straight from the content-addressed attachment store (`$DSH_HOME/attachments/v1/objects/…`), recovers the media type from the bytes, and describes it through the same chain. This is the channel a wrapped-`(vision)` model uses to inspect the original pixels when the auto-description needs verification — the rewrite text carries the attachment id and points the model here instead of searching local files.
 
@@ -77,10 +77,14 @@ A landed description appends to the session log, so later main-route requests in
 ```sh
 # Tests resolve the harness source tree via tsconfig paths (see vitest.config.ts)
 vitest run
+# Dual-face type checks: host (src/, src/client excluded) and client (src/client + jsdom specs)
 tsc --noEmit
+tsc --noEmit -p tsconfig.client.json
+# Dual-face build: lib/index.js (host) + lib/client.js (browser lazy-CJS bundle)
+tsdown
 ```
 
-The package's tsconfig extends `deepseek-harness/tsconfig.base.json`; runtime/test resolution points vendor packages at their `src` (Vite alias) and dsh packages at their `src` (tsconfig paths). Building requires the harness `node_modules` (a junction on Windows) for the toolchain. The browser half is a hand-written lazy-CJS bundle (`client.js`, zero imports) — no build step.
+The package's tsconfigs extend `deepseek-harness/tsconfig.base.json` (host) and `tsconfig.base.client.json` (client); runtime/test resolution points vendored framework packages and react at the harness install (Vite alias) and dsh packages at their built `lib/types` declarations (tsconfig paths). Building requires the harness `node_modules` for the toolchain. The browser half is TypeScript + React under `src/client/`, compiled by the shared `clientBundle` preset from the harness (`lib/client.js`), with CSS Modules injected as `<style data-plugin>` tags at materialization.
 
 ## Known Limitations and Deferred Work
 

@@ -7,7 +7,7 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./client": "./client.js",
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "dsh": {
@@ -15,7 +15,9 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "inject": [],
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
       "platform": "web",
       "immediately": true
     }
@@ -44,7 +46,6 @@
   },
   "files": [
     "lib",
-    "client.js",
     "cordis.patch.yml",
     "src",
     "tests",

@@ -7,6 +7,8 @@
     "sourceMap": false,
     "incremental": false,
     "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "paths": {
       "@deepseek-ai/cordis": ["../../deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
       "@deepseek-ai/cosmokit": ["../../deepseek-harness/vendor/cosmokit/lib/types/index.d.ts"],
@@ -32,6 +34,14 @@
       "@deepseek-ai/dsh-user-approval/types": ["../../deepseek-harness/packages/interaction/user-approval/src/types.ts"],
       "@deepseek-ai/dsh-user-questions/types": ["../../deepseek-harness/packages/interaction/user-questions/src/types.ts"],
       "@deepseek-ai/dsh-host-webserver": ["../../deepseek-harness/packages/host/webserver/src"],
+      "react": ["../../deepseek-harness/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["../../deepseek-harness/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types/react/jsx-runtime.d.ts"],
+      "@deepseek-ai/dsh-client-runtime/client": ["../../deepseek-harness/packages/client/runtime/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-runtime": ["../../deepseek-harness/packages/client/runtime/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-conversation/client": ["../../deepseek-harness/packages/client/ui-conversation/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-slots": ["../../deepseek-harness/packages/client/ui-slots/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-client-*/client": ["../../deepseek-harness/packages/client/*/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-*": ["../../deepseek-harness/packages/client/*/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-*": [
         "../../deepseek-harness/packages/core/*/src",
         "../../deepseek-harness/packages/prompt/*/src",
@@ -83,5 +93,6 @@
       ]
     }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests"],
+  "exclude": ["src/client", "tests/**/*.client.spec.tsx"]
 }

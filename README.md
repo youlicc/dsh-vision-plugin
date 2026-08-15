@@ -15,10 +15,12 @@
 dsh-vision-plugin/
   docs/vision-lazy-design.md   # 完整设计文档（含 A 式→B 式演进记录）
   docs/development-plan-vision-menu.md  # 视觉模型菜单实施计划（已实施）
+  docs/migration-plan-client-ts.md      # client 迁移 TS + clientBundle 计划（已实施）
   vision-plugin/               # 插件包 @dsh-external/dsh-vision-plugin
     src/                       # host 侧：paste 端点 + 识图服务 + describe_image 工具 + 视觉模型菜单端点
-    client.js                  # 浏览器侧：粘贴拦截 + 视觉模型菜单（手写 lazy-CJS，零构建）
-    tests/                     # 57 个测试（单元 + 组合）
+    src/client/                # browser 侧：React 组件 + 粘贴拦截（TS，经 clientBundle 编译）
+    tests/                     # host 单测 + client 组件测试（62 用例）
+    lib/                       # 构建产物：lib/index.js（host）+ lib/client.js（browser bundle）
     cordis.patch.yml           # bundle 注册
 ```
 
@@ -65,7 +67,7 @@ pnpm dsh plugin --profile web add /path/to/dsh-vision-plugin/vision-plugin
 
 ## 验证
 
-- 插件：`vitest run`（57 测试：56 通过 + 1 Windows 跳过）+ `tsc --noEmit` 全绿；
+- 插件：`vitest run`（62 用例：61 通过 + 1 Windows 跳过）+ 双面 `tsc --noEmit`（host + client）+ `tsdown` 双面构建全绿；
 - dsh：零改动，无需回归；
 - 端到端：早期 A 式（准入扩展点）版本已在真实实例验证三条路径；B 式（纯插件）的核心链路（工具识别 + 临时文件读取）由组合测试覆盖，粘贴拦截与视觉模型菜单待真实实例复验。
 
