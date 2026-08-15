@@ -1,6 +1,7 @@
 # 实施计划：client.js → TS + clientBundle（方案 B）
 
 - 状态：✅ 已实施（迁移完成；后续 tsconfig 合并为单一 `tsconfig.json`，`tsconfig.client.json` 已删除——VSCode 只自动发现 `tsconfig.json`，拆分会导致 src/client 落入无 paths 的 inferred project 报 ts(2307)）
+- 后续演进（npm 迁移，见 docs 同目录决策记录）：dsh 包改用 npm `^0.1.0-rc.6` 依赖后，`tsdown.config.ts` 不再 import harness 的 `clientBundle` 预设，改为**本地 standalone 配置**（镜像 `packages/client/tsdown.client.ts`，同 dsh-visual-plugin 做法）；插件构建已零 harness 引用。下文为原始计划记录。
 - 目标：把 `vision-plugin/client.js`（手写 lazy-CJS）迁移为 TypeScript + React 组件，经 dsh 的 clientBundle 构建链产出 `lib/client.js`，与 dsh 官方 client 插件同构。
 - 功能不变：粘贴拦截 + 视觉模型菜单，行为、端点、样式语义全部保持。
 

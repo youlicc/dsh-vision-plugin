@@ -21,8 +21,8 @@ const Config = z.object({
 	maxOutputTokens: z.natural().default(2048),
 	timeoutMs: z.natural().default(6e4),
 	maxInputBytes: z.natural().default(0),
-	pasteMaxBytes: z.natural().default(20 * 1024 * 1024),
-	pasteRetentionMs: z.natural().default(1440 * 60 * 1e3),
+	pasteMaxBytes: z.natural().default(20971520),
+	pasteRetentionMs: z.natural().default(864e5),
 	pasteToPath: z.boolean().default(true),
 	wrappedModels: z.boolean().default(true),
 	visionMenu: z.boolean().default(true)
@@ -514,7 +514,8 @@ async function handlePasteBytes(data, maxBytes) {
 	const buffer = Buffer.from(data);
 	const sniff = SNIFFS.find((candidate) => candidate.test(buffer));
 	if (sniff === void 0) throw new Error("not a recognized image (png/jpeg/webp/gif)");
-	const file = join(await mkdtemp(join(tmpdir(), "dsh-vision-paste-")), `paste-${Date.now()}${sniff.ext}`);
+	const dir = await mkdtemp(join(tmpdir(), "dsh-vision-paste-"));
+	const file = join(dir, `paste-${Date.now()}${sniff.ext}`);
 	await writeFile(file, buffer, { mode: 384 });
 	return file;
 }

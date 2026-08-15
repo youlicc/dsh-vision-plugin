@@ -40,9 +40,9 @@ pnpm dsh plugin --profile web add /path/to/dsh-vision-plugin/vision-plugin
 
 插件默认配置即开即用（不配置 provider/models 时由 composer 菜单选择免费视觉模型）；需要自定义时在插件配置面修改：
 
-### 开发依赖（编译期）
+### 开发依赖
 
-**开发本插件仓库**（跑 `tsc` / `vitest` / `tsdown`）需要 `deepseek-harness` 检出位于本仓库的**兄弟目录**（`../deepseek-harness`），因为 dsh 包是私有未发布的、无法从 npm 安装，开发期类型/工具链从该检出解析。**安装与运行不依赖此布局**——`dsh plugin add` 装入 profile 后，`@deepseek-ai/*` 依赖由 dsh 自身安装提供。详见 `vision-plugin/README.md` 的 "Development" 一节。
+**开发本插件仓库**：所有 `@deepseek-ai/*` 包、react 与工具链（typescript/vitest/tsdown/lightningcss）都通过 npm 从本包自己的 `node_modules` 解析（`^0.1.0-rc.6`），执行 `pnpm install` 即可，**完全不需要 harness 检出**。`tsdown.config.ts` 是本地 standalone 双面构建（host + client）。**安装与运行也不依赖任何外部布局**——`dsh plugin add` 装入 profile 后，`@deepseek-ai/*` 依赖由 dsh 自身安装提供。详见 `vision-plugin/README.md` 的 "Development" 一节。
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
