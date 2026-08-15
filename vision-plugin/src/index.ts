@@ -1,10 +1,9 @@
 /**
  * dsh-vision-plugin: the vision bridge for text-only routes. Registers the
- * `describe_image` tool (any local image path, including the paste-to-path
- * temp files) backed by a configurable vision model chain, and the
- * paste-to-path intake: the browser half intercepts image pastes, uploads the
- * bytes here, and inserts the returned file path into the composer as text,
- * so a text-only model never trips image admission.
+ * `describe_image` / `describe_attachment` tools backed by a configurable
+ * vision model chain, the paste-to-path intake, wrapped `(vision)` mirror
+ * models, and the composer vision-model menu (auto-detected free vision
+ * models per configured provider).
  * @module @dsh-external/dsh-vision-plugin
  */
 
@@ -15,9 +14,12 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import { Config, type Config as ConfigShape } from './config.ts'
 import { DescribeService } from './describe.ts'
 import { applyDescribeImageTool } from './describe-image.ts'
+import { applyDescribeAttachmentTool } from './describe-attachment.ts'
 import { registerPasteRoute } from './paste.ts'
 import { applyWrappedProviders } from './wrapped-provider.ts'
-import { applyDescribeAttachmentTool } from './describe-attachment.ts'
+import { registerVisionModelMenu } from './vision-model-menu.ts'
+import { VisionModelSelection } from './vision-model-selection.ts'
+import { defaultVisionRoute, resolveVisionModelGroups } from './vision-models.ts'
 
 export const name = 'dsh-vision-plugin'
 
@@ -27,25 +29,49 @@ export const inject = ['tools', 'systemPrompt']
 export { Config }
 
 export function apply(ctx: Context, config: ConfigShape): void {
-  const describe = new DescribeService(ctx, config)
+  // The vision route chain: explicit config, else the composer menu
+  // selection (auto-detected free vision models).
+  const selection = new VisionModelSelection()
+  const describe = new DescribeService(ctx, config, config.visionMenu ? selection : undefined)
 
-  // The tools register unconditionally; execution re-checks the mounted
-  // services defensively, so a store-less deployment fails with a clear tool
-  // error instead of a hidden registration gap.
+  // The menu default is the first offered free vision model in catalog
+  // order; it resolves only once the llm topology is mounted (pi-ai routes
+  // land after settings load), so refresh it on the same events the wrapped
+  // providers listen to.
+  const refreshDefault = (): void => {
+    void resolveVisionModelGroups(ctx).then(groups => {
+      selection.updateDefault(defaultVisionRoute(groups))
+    }).catch(() => { /* topology transient: keep the previous default */ })
+  }
+  const initial = setTimeout(refreshDefault, 0)
+  // `llm/adapters-updated` is a documented-but-untyped notification; the
+  // narrow ctx.on overloads do not know it, so call through a string-loose
+  // face (same pattern as the wrapped providers).
+  const onUpdated: () => void = (ctx.on as unknown as (name: string, listener: () => void) => () => void)(
+    'llm/adapters-updated',
+    refreshDefault,
+  )
+  ctx.effect(() => () => {
+    clearTimeout(initial)
+    onUpdated()
+  }, 'dsh-vision-plugin: vision menu topology refresh')
+
+  // Tools register unconditionally; execution re-checks the mounted services
+  // defensively.
   applyDescribeImageTool(ctx, describe)
   applyDescribeAttachmentTool(ctx, describe)
 
-  // Mirror `(vision)` models for text-only routes: selecting one keeps the
-  // native thumbnail paste (image admission passes) while the wrapper
-  // rewrites image blocks into descriptions before the real route.
+  // Mirror `(vision)` models for text-only routes.
   const disposeWrapped = applyWrappedProviders(ctx, describe, config.wrappedModels)
   ctx.effect(() => disposeWrapped, 'dsh-vision-plugin: wrapped vision providers')
 
-  // Paste-to-path is web-only: the route mounts when the web server appears
-  // and never where it does not (headless stays untouched).
-  if (config.pasteToPath) {
+  // Paste-to-path and the vision-model menu are web-only: they mount when
+  // the web server appears and never where it does not (headless stays a
+  // tool-only bridge).
+  if (config.pasteToPath || config.visionMenu) {
     ctx.inject(['webServer'], (scope) => {
-      registerPasteRoute(scope as Context, ctx, config)
+      if (config.pasteToPath) registerPasteRoute(scope as Context, ctx, config)
+      if (config.visionMenu) registerVisionModelMenu(scope as Context, ctx, selection)
     })
   }
 }

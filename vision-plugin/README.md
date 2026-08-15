@@ -1,9 +1,10 @@
 # @dsh-external/dsh-vision-plugin
 
-Vision bridge for text-only routes: pasted images become temp-file paths (paste-to-path), and the `describe_image` tool reads them through a configurable vision provider, returning the description as text.
+Vision bridge for text-only routes: pasted images become temp-file paths (paste-to-path), the `describe_image` tool reads them through a configurable vision provider, returning the description as text, and the composer shows a vision-model menu that picks the free vision model used for recognition.
 
 ## What it does
 
+- **Vision-model menu (composer)**: a `视觉：<模型>` button in the composer tool row (the `conversation.input.right` seat, right before the send button) opens a provider-grouped dropdown of the **free** vision models offered by the currently configured providers. The free list is the plugin-maintained `FREE_VISION_MODELS` catalog (never scanned from model metadata): OpenRouter's four `:free` models and OpenCode's `mimo-v2.5-free`. The default selection is the first offered model in catalog order; clicking a model switches the vision route for the next recognition. No configured provider offering a free model → the button is hidden entirely.
 - **Paste-to-path intake**: the browser half (`client.js`) intercepts image pastes on a capture-phase listener. When the host verdict says the selected model is text-only, the paste is taken over: the bytes upload to `POST /vision-plugin/paste`, land as a private (0600) temp file in a fresh unpredictable temp dir, and the returned path is inserted into the composer as plain text. A text-only model never trips image admission; a vision model keeps its native thumbnail paste (the verdict resolves the selector label against real model metadata, `GET /vision-plugin/paste?model=<label>`).
 - **`describe_image` tool**: reads a local PNG/JPEG/WebP/GIF file (workspace or pasted temp path) with node's own fs, durably commits it through the attachment service, describes it through the vision model chain, and returns the description as text. The image never enters the routed model's request as an image block.
 - **`describe_attachment` tool**: re-reads a durable image by its attachment id (`sha256:…`) straight from the content-addressed attachment store (`$DSH_HOME/attachments/v1/objects/…`), recovers the media type from the bytes, and describes it through the same chain. This is the channel a wrapped-`(vision)` model uses to inspect the original pixels when the auto-description needs verification — the rewrite text carries the attachment id and points the model here instead of searching local files.
@@ -14,9 +15,10 @@ Plugin entry `config` (cordis.yml / settings), all optional:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `provider` | `openrouter` | Vision provider route (any registered llm route). |
-| `models` | four OpenRouter free vision models | Ordered fallback chain; first non-empty success wins. |
+| `provider` | absent | Vision provider route. Absent (with `models` absent) → the composer menu selection decides; present → explicit configuration wins. |
+| `models` | absent | Ordered fallback chain; first non-empty success wins. Absent (with `provider` absent) → menu selection plus the same provider's remaining free models as fallback. |
 | `systemPrompt` | Chinese describe prompt | System prompt for the vision call. |
+| `visionMenu` | `true` | Composer vision-model menu on/off. Off → recognition falls back to the explicit config only. |
 | `pasteToPath` | `true` | Browser paste interception on/off. |
 | `pasteMaxBytes` | 20 MiB | Upload cap for the paste endpoint. |
 | `pasteRetentionMs` | 24h | Paste temp dirs older than this are swept. |
@@ -26,11 +28,13 @@ Plugin entry `config` (cordis.yml / settings), all optional:
 
 ## Behavior notes
 
+- Route resolution order: explicit `provider`/`models` config first, then the composer menu selection (with same-provider free-model fallback), then a clear error telling you to configure a provider or pick a free model in the menu.
+- The menu lists only **configured providers** (routes registered in the llm topology) and only **free** models from the plugin's own catalog; a provider whose catalog lacks any free vision model is skipped.
 - Provider/model are plain configuration: switching to SiliconFlow, Anthropic, or a local Ollama route is a config change, never a code change. The only constraint is that the vision route lives on the pi-ai adapter family (the DeepSeek official adapter is text-only).
 - Recognition is deduplicated in-flight per image bytes; identical concurrent calls share one vision request.
 - **Multi-image messages recognize in parallel**: a wrapped-`(vision)` turn with N images fires the N recognition calls concurrently, so the pre-token stall scales with one recognition (free models queue 30-80s), not N. A single failed recognition degrades to an inline placeholder instead of failing the request.
-- The paste route mounts only when a web server is present (`ctx.inject(['webServer'])`): headless deployments stay a tool-only bridge.
-- No dsh source changes are required: the plugin consumes only public services (`ctx.llm`, `ctx.attachments`, `ctx.tools`, `ctx.webServer`).
+- The paste route and the vision-model menu mount only when a web server is present (`ctx.inject(['webServer'])`): headless deployments stay a tool-only bridge.
+- No dsh source changes are required: the plugin consumes only public services (`ctx.llm`, `ctx.attachments`, `ctx.tools`, `ctx.webServer`, `ctx.slots`).
 
 ## Paste temp files: lifecycle and selection
 
@@ -80,6 +84,8 @@ The package's tsconfig extends `deepseek-harness/tsconfig.base.json`; runtime/te
 
 ## Known Limitations and Deferred Work
 
+- **Menu selection is not persisted** — a page reload returns to the default (first offered free model); remembering the last pick is deferred.
+- **Paid vision models are not in the menu** — the menu lists only the plugin's free catalog; paid models remain a configuration choice.
 - **Pasted images render as path text, not thumbnails** — the paste-to-path tradeoff (same as the community `modlens` plugin); a client renderer that turns the temp path into a thumbnail is deferred.
 - **Free vision models are rate-limited** — OpenRouter `:free` models run about 20 requests/minute and can be retired upstream; the fallback chain and configurable model list absorb that.
 - **Recognition memory is not persisted** — identical bytes are deduplicated only in-flight; a description cache keyed by content hash is deferred.

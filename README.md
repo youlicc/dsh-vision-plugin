@@ -14,17 +14,19 @@
 ```
 dsh-vision-plugin/
   docs/vision-lazy-design.md   # 完整设计文档（含 A 式→B 式演进记录）
+  docs/development-plan-vision-menu.md  # 视觉模型菜单实施计划（已实施）
   vision-plugin/               # 插件包 @dsh-external/dsh-vision-plugin
-    src/                       # host 侧：paste 端点 + 识图服务 + describe_image 工具
-    client.js                  # 浏览器侧：粘贴拦截（手写 lazy-CJS，零构建）
-    tests/                     # 16 个测试（单元 + 组合）
+    src/                       # host 侧：paste 端点 + 识图服务 + describe_image 工具 + 视觉模型菜单端点
+    client.js                  # 浏览器侧：粘贴拦截 + 视觉模型菜单（手写 lazy-CJS，零构建）
+    tests/                     # 57 个测试（单元 + 组合）
     cordis.patch.yml           # bundle 注册
 ```
 
 ## 依赖关系
 
-- **dsh 源码：零改动**。插件只用 dsh 的公开服务（`ctx.llm`、`ctx.attachments`、`ctx.tools`、`ctx.webServer`）。
+- **dsh 源码：零改动**。插件只用 dsh 的公开服务（`ctx.llm`、`ctx.attachments`、`ctx.tools`、`ctx.webServer`、`ctx.slots`）。
 - 视觉调用走 `ctx.llm` 通用 seam：provider/model 全部配置化，默认 OpenRouter + 4 个免费视觉模型回退链（`google/gemma-4-31b-it:free` 等），可换成任何已注册路由（SiliconFlow、Anthropic、本地 Ollama…）。
+- **composer 视觉模型菜单**：不配置 `provider/models` 时，识图路由由菜单选择决定——菜单只显示**已配置供应商**的**免费**视觉模型（插件内置 `FREE_VISION_MODELS` 清单：OpenRouter 4 个 `:free` + OpenCode `mimo-v2.5-free`），默认选中清单顺序第一个，点击即切换；无可用免费模型时按钮隐藏。
 
 ## 安装与配置
 
@@ -34,12 +36,13 @@ pnpm dsh plugin --profile web add /path/to/dsh-vision-plugin/vision-plugin
 # 重启 dsh web 服务
 ```
 
-插件默认配置即开即用（provider=`openrouter` + 免费模型链）；需要自定义时在插件配置面修改：
+插件默认配置即开即用（不配置 provider/models 时由 composer 菜单选择免费视觉模型）；需要自定义时在插件配置面修改：
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
-| `provider` | `openrouter` | 视觉模型路由（任何已注册 llm 路由） |
-| `models` | 4 个 OpenRouter 免费视觉模型 | 有序回退链 |
+| `provider` | 缺省 | 视觉模型路由（任何已注册 llm 路由）；与 `models` 同时缺省时用菜单选择 |
+| `models` | 缺省 | 有序回退链；与 `provider` 同时缺省时用菜单选择（同供应商免费模型作回退） |
+| `visionMenu` | `true` | 是否启用 composer 视觉模型菜单（关掉后只走显式配置） |
 | `systemPrompt` | 中文识图提示词 | 视觉调用系统提示 |
 | `pasteToPath` | `true` | 是否启用浏览器粘贴拦截（`false` 则恢复原生粘贴行为，只用工具） |
 | `pasteMaxBytes` | 20MB | 粘贴上传字节上限 |
@@ -47,6 +50,7 @@ pnpm dsh plugin --profile web add /path/to/dsh-vision-plugin/vision-plugin
 
 ## 使用
 
+0. **（可选）选择视觉模型**：composer 工具行右侧的"视觉：<模型>"按钮 → 按供应商分组的免费模型下拉 → 点击切换（默认已选中清单第一个可用者；无可用时不显示按钮）。
 1. **粘贴图片**：在 DeepSeek 会话 Ctrl+V 粘贴 → 输入框出现图片的**临时文件路径** → 发送 → agent 自动调用 `describe_image` → 描述进入上下文（5–30 秒）；
 2. **本地图片**：对 agent 说"用 describe_image 看一下 `<路径>`"；
 3. **视觉模型会话**：粘贴走原生缩略图路径（客户端会先询问 host 的 verdict，只有确认为文本模型才接管粘贴）。
@@ -57,13 +61,13 @@ pnpm dsh plugin --profile web add /path/to/dsh-vision-plugin/vision-plugin
 - **自动清理**：这些临时目录是**一次性输入**，超过 `pasteRetentionMs`（默认 24 小时）的目录在**插件挂载时和每次新粘贴后**自动删除——不会在 TEMP 里长期堆积，避免"残留旧图被误当成当前粘贴"。
 - **模型复核时的选型原则**：消息里自带路径文本时直接使用（paste-to-path）；包装模型（缩略图）路径下消息没有路径，若模型需要复核，**一般取最新的 `dsh-vision-paste-*` 目录**，**最准确是取创建时间最贴近该消息发出时间的目录**（粘贴与消息一一对应，时间对齐能排除旧残留）。
 
-已知限制（v1）：粘贴的图片在消息里显示为路径文本而非缩略图；免费模型有频率限制（约 20 请求/分钟）。
+已知限制（v1）：粘贴的图片在消息里显示为路径文本而非缩略图；免费模型有频率限制（约 20 请求/分钟）；菜单选择不持久化（刷新回默认）。
 
 ## 验证
 
-- 插件：`vitest run`（16 测试）+ `tsc --noEmit` 全绿；
+- 插件：`vitest run`（57 测试：56 通过 + 1 Windows 跳过）+ `tsc --noEmit` 全绿；
 - dsh：零改动，无需回归；
-- 端到端：早期 A 式（准入扩展点）版本已在真实实例验证三条路径；B 式（纯插件）的核心链路（工具识别 + 临时文件读取）由组合测试覆盖，粘贴拦截待真实实例复验。
+- 端到端：早期 A 式（准入扩展点）版本已在真实实例验证三条路径；B 式（纯插件）的核心链路（工具识别 + 临时文件读取）由组合测试覆盖，粘贴拦截与视觉模型菜单待真实实例复验。
 
 ## 与社区方案的关系
 

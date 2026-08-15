@@ -12,6 +12,9 @@ import { BlockAssembler, createUserMessage, LlmError } from '@deepseek-ai/dsh-ll
 import type { ContentBlock, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { Config } from './config.ts'
+import type { VisionModelSelection } from './vision-model-selection.ts'
+import type { VisionRoute } from './vision-models.ts'
+import { FREE_VISION_MODELS } from './vision-models.ts'
 
 /** Collect one stream into its assembled content blocks, failing on stream errors. */
 async function collectText(stream: AsyncIterable<StreamChunk>): Promise<ContentBlock[]> {
@@ -40,6 +43,7 @@ export class DescribeService {
   constructor(
     private readonly ctx: Context,
     private readonly config: Config,
+    private readonly selection?: VisionModelSelection,
   ) {}
 
   /**
@@ -91,27 +95,47 @@ export class DescribeService {
       mediaType,
       ...name === undefined ? {} : { name },
     })
+    // Resolve the vision route chain: explicit config wins, then the menu
+    // selection (plus the same provider's remaining free models as fallback),
+    // then fail with a clear message.
+    const routes = this.resolveRoutes()
+    if (routes.length === 0) {
+      throw new Error('未配置视觉模型供应商：请在插件配置中设置 provider/models，或在 composer 的“视觉模型”菜单中选择一个免费视觉模型')
+    }
     const failures: string[] = []
-    for (const model of this.config.models) {
+    for (const route of routes) {
       signal?.throwIfAborted()
       try {
-        const text = await this.callModel(ref, question, model, signal)
+        const text = await this.callModel(ref, question, route, signal)
         if (text.trim().length > 0) return { ref, text }
-        failures.push(`${model}: empty description`)
+        failures.push(`${route.provider}/${route.model}: empty description`)
       } catch (error: unknown) {
         // An external cancellation is terminal: never fall through to the
         // next model after the caller gave up.
         if (signal?.aborted) throw error
-        failures.push(`${model}: ${error instanceof Error ? error.message : String(error)}`)
+        failures.push(`${route.provider}/${route.model}: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
-    throw new Error(`all vision models failed (${this.config.provider}): ${failures.join('; ')}`)
+    throw new Error(`all vision models failed: ${failures.join('; ')}`)
+  }
+
+  /** The ordered route chain: explicit config, else menu selection, else empty. */
+  private resolveRoutes(): readonly VisionRoute[] {
+    if (this.config.provider !== undefined && this.config.models !== undefined && this.config.models.length > 0) {
+      return this.config.models.map(model => ({ provider: this.config.provider!, model }))
+    }
+    const selected = this.selection?.currentRoute()
+    if (selected === undefined) return []
+    const sameProvider = (FREE_VISION_MODELS[selected.provider] ?? [])
+      .filter(model => model !== selected.model)
+      .map(model => ({ provider: selected.provider, model }))
+    return [selected, ...sameProvider]
   }
 
   private async callModel(
     ref: ImageAttachmentRef,
     question: string,
-    model: string,
+    route: VisionRoute,
     signal?: AbortSignal,
   ): Promise<string> {
     const llm = this.ctx.get('llm')
@@ -125,7 +149,7 @@ export class DescribeService {
     signal?.addEventListener('abort', forward, { once: true })
     try {
       const prepared = await llm.prepareCall(
-        { provider: this.config.provider, model, maxTokens: this.config.maxOutputTokens },
+        { provider: route.provider, model: route.model, maxTokens: this.config.maxOutputTokens },
         controller.signal,
       )
       const options: GenerateOptions = {
@@ -149,7 +173,7 @@ export class DescribeService {
       // The deadline fired (and the caller did not cancel): report TIMEOUT so
       // the chain moves on. Any other failure propagates as-is.
       if (controller.signal.aborted && signal?.aborted !== true) {
-        throw new LlmError(`vision model "${model}" timed out after ${this.config.timeoutMs}ms`, 'TIMEOUT')
+        throw new LlmError(`vision model "${route.model}" timed out after ${this.config.timeoutMs}ms`, 'TIMEOUT')
       }
       throw error
     } finally {

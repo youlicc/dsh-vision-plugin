@@ -58,6 +58,7 @@ const CONFIG = {
   pasteRetentionMs: 86400000,
   pasteToPath: true,
   wrappedModels: true,
+  visionMenu: true,
 }
 
 const dirs: string[] = []

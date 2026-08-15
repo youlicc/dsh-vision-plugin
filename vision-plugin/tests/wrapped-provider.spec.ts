@@ -42,6 +42,7 @@ const CONFIG = {
   pasteRetentionMs: 86400000,
   pasteToPath: true,
   wrappedModels: true,
+  visionMenu: true,
 }
 
 /** Records every delegated request it streams. */

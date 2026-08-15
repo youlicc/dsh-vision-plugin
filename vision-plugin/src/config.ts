@@ -18,10 +18,16 @@ export const DEFAULT_MODELS: readonly string[] = [
 
 /** Resolved plugin configuration. */
 export interface Config {
-  /** Provider route serving the vision models (any registered llm route). */
-  readonly provider: string
-  /** Ordered fallback model chain; the first succeeding model wins. */
-  models: string[]
+  /**
+   * Provider route serving the vision models. Absent means "use the composer
+   * vision-model menu selection" (auto-detected free vision models).
+   */
+  readonly provider?: string
+  /**
+   * Ordered fallback model chain on {@link provider}. Absent (with provider
+   * absent) means "use the menu selection".
+   */
+  models?: string[]
   /** System prompt for the vision call. */
   readonly systemPrompt: string
   /** Maximum output tokens per vision call. */
@@ -38,11 +44,13 @@ export interface Config {
   readonly pasteToPath: boolean
   /** Whether text-only provider routes get `(vision)` mirror models (thumbnail paste). */
   readonly wrappedModels: boolean
+  /** Whether the composer vision-model menu is enabled (auto free-vision detection). */
+  readonly visionMenu: boolean
 }
 
 export const Config: z<Config> = z.object({
-  provider: z.string().default('openrouter'),
-  models: z.array(z.string()).default([...DEFAULT_MODELS]),
+  provider: z.string(),
+  models: z.array(z.string()),
   systemPrompt: z.string().default(
     '你是图像识别助手。请用中文详细、准确地描述这张图片的内容，包括主体、场景、文字（如有）与细节。',
   ),
@@ -53,4 +61,5 @@ export const Config: z<Config> = z.object({
   pasteRetentionMs: z.natural().default(24 * 60 * 60 * 1000),
   pasteToPath: z.boolean().default(true),
   wrappedModels: z.boolean().default(true),
+  visionMenu: z.boolean().default(true),
 })
