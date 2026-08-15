@@ -77,14 +77,14 @@
 ```sh
 # 测试通过 tsconfig paths 解析 harness 源码树（见 vitest.config.ts）
 vitest run
-# 双面类型检查：host（src/，排除 src/client）与 client（src/client + jsdom 规格）
+# 类型检查：单一 tsconfig.json 同时覆盖 host 程序（src/）与浏览器端（src/client）——
+# 编辑器只自动发现 tsconfig.json，所以合并后的 project 正是 VSCode TS server 解析所用的
 tsc --noEmit
-tsc --noEmit -p tsconfig.client.json
 # 双面构建：lib/index.js（host）+ lib/client.js（浏览器 lazy-CJS bundle）
 tsdown
 ```
 
-包的 tsconfig 分别继承 `deepseek-harness/tsconfig.base.json`（host）和 `tsconfig.base.client.json`（client）；运行时/测试解析把 vendored 框架包和 react 指向 harness 安装（Vite alias），把 dsh 包指向其已构建的 `lib/types` 声明（tsconfig paths）。构建需要 harness 的 `node_modules` 提供工具链。浏览器端是 `src/client/` 下的 TypeScript + React，由 harness 的共享 `clientBundle` 预设编译（`lib/client.js`），CSS Modules 在物化时以 `<style data-plugin>` 标签注入。
+包的单一 tsconfig 继承 `deepseek-harness/tsconfig.base.client.json`（JSX + DOM lib），并为 host 半恢复 node types；运行时/测试解析把 vendored 框架包和 react 指向 harness 安装（Vite alias），把 dsh 包指向其已构建的 `lib/types` 声明（tsconfig paths）。构建需要 harness 的 `node_modules` 提供工具链。浏览器端是 `src/client/` 下的 TypeScript + React，由 harness 的共享 `clientBundle` 预设编译（`lib/client.js`），CSS Modules 在物化时以 `<style data-plugin>` 标签注入。
 
 ## 已知限制与待办
 

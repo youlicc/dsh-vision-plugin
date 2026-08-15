@@ -77,14 +77,15 @@ A landed description appends to the session log, so later main-route requests in
 ```sh
 # Tests resolve the harness source tree via tsconfig paths (see vitest.config.ts)
 vitest run
-# Dual-face type checks: host (src/, src/client excluded) and client (src/client + jsdom specs)
+# Type check: one tsconfig.json covers both the host program (src/) and the
+# browser half (src/client) — the editor discovers only tsconfig.json, so the
+# merged project is what VSCode's TS server resolves against.
 tsc --noEmit
-tsc --noEmit -p tsconfig.client.json
 # Dual-face build: lib/index.js (host) + lib/client.js (browser lazy-CJS bundle)
 tsdown
 ```
 
-The package's tsconfigs extend `deepseek-harness/tsconfig.base.json` (host) and `tsconfig.base.client.json` (client); runtime/test resolution points vendored framework packages and react at the harness install (Vite alias) and dsh packages at their built `lib/types` declarations (tsconfig paths). Building requires the harness `node_modules` for the toolchain. The browser half is TypeScript + React under `src/client/`, compiled by the shared `clientBundle` preset from the harness (`lib/client.js`), with CSS Modules injected as `<style data-plugin>` tags at materialization.
+The package's single tsconfig extends `deepseek-harness/tsconfig.base.client.json` (JSX + DOM lib) with node types restored for the host half; runtime/test resolution points vendored framework packages and react at the harness install (Vite alias) and dsh packages at their built `lib/types` declarations (tsconfig paths). Building requires the harness `node_modules` for the toolchain. The browser half is TypeScript + React under `src/client/`, compiled by the shared `clientBundle` preset from the harness (`lib/client.js`), with CSS Modules injected as `<style data-plugin>` tags at materialization.
 
 ## Known Limitations and Deferred Work
 

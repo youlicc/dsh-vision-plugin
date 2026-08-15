@@ -5,11 +5,12 @@ import { standardDecoratorPlugin } from '../../deepseek-harness/vitest.shared.ts
 const HARNESS = resolve(__dirname, '../../deepseek-harness')
 
 /**
- * The tsconfig extends deepseek-harness/tsconfig.base.json, whose paths map
- * every @deepseek-ai/* import to the harness source tree (with the vendored
- * framework packages pointing at their built lib/types declarations for the
- * compiler). The runtime needs the vendored sources instead — their .d.ts
- * cannot be loaded by Vite — so alias each vendored package to its src entry.
+ * The tsconfig extends deepseek-harness/tsconfig.base.client.json, whose
+ * paths map every @deepseek-ai/* import to the harness source tree (with the
+ * vendored framework packages pointing at their built lib/types declarations
+ * for the compiler). The runtime needs the vendored sources instead — their
+ * .d.ts cannot be loaded by Vite — so alias each vendored package to its src
+ * entry.
  */
 const VENDOR_ALIASES = [
   ['@deepseek-ai/cordis', 'cordis'],
