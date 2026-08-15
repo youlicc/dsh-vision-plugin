@@ -1,6 +1,6 @@
 # 实施计划：client.js → TS + clientBundle（方案 B）
 
-- 状态：待评审
+- 状态：✅ 已实施（迁移完成；后续 tsconfig 合并为单一 `tsconfig.json`，`tsconfig.client.json` 已删除——VSCode 只自动发现 `tsconfig.json`，拆分会导致 src/client 落入无 paths 的 inferred project 报 ts(2307)）
 - 目标：把 `vision-plugin/client.js`（手写 lazy-CJS）迁移为 TypeScript + React 组件，经 dsh 的 clientBundle 构建链产出 `lib/client.js`，与 dsh 官方 client 插件同构。
 - 功能不变：粘贴拦截 + 视觉模型菜单，行为、端点、样式语义全部保持。
 
@@ -23,8 +23,8 @@ vision-plugin/
     types/client/index.d.ts     # client 类型（tsc 生成，新）
   tests/
     vision-menu.client.spec.tsx # client 组件测试（新，jsdom）
-  tsconfig.json                 # host 面（不变）
-  tsconfig.client.json          # client 面（新增，extends tsconfig.base.client.json）
+  tsconfig.json                 # 单一 tsconfig：extends base.client（JSX/DOM）+ node types + harness.paths.json
+  harness.paths.json            # 集中全部 @deepseek-ai/* paths（相对 ../deepseek-harness，编译期唯一依赖）
   tsdown.config.ts              # 改为 clientBundle()（双面构建）
   package.json                  # exports "./client" → "./lib/client.js"，加 dsh.client 声明
 ```
@@ -35,7 +35,7 @@ vision-plugin/
 1. `tsdown.config.ts` → 使用 dsh 的 `clientBundle` 预设：从 harness 绝对路径 import（`../../deepseek-harness/packages/client/tsdown.client.ts`），lib 入口 `['lib/types/index.js', 'lib/types/client/index.js']`，id = `@dsh-external/dsh-vision-plugin`。产物 `lib/client.js`（banner/footer 自动包 lazy-CJS）。
 2. 验证 `clientBundle` 内部 `./web/src/platform.ts` 相对导入在外部仓库 cwd 下可解析（tsdown 以配置文件所在目录解析相对导入，应无碍；如有问题则改为在本地复制精简版预设，仅保留本插件需要的 CSS modules + external 逻辑）。
 3. `package.json`：`exports["./client"]` → `./lib/client.js`；新增 `dsh.client = { platform: 'web', immediately: true, inject: ['@deepseek-ai/dsh-client-ui-conversation'] }`（对齐 dsh 规范；`inject` 仅信息性）。
-4. `tsconfig.client.json`：extends `deepseek-harness/tsconfig.base.client.json`，references 指向 harness 的 client 包（ui-conversation、ui-slots、runtime 等）。
+4. 类型链：单一 `tsconfig.json` extends `harness.paths.json`（全部 `@deepseek-ai/*` paths 指向 harness 兄弟检出的源码或 `lib/types` 产物）。不做 `tsconfig.client.json` 拆分——VSCode 的 TS server 只自动发现 `tsconfig.json`，拆分会让 src/client 落入无 paths 的 inferred project（实测报 ts(2307)）。
 
 ### 2.2 源码迁移（行为等价）
 5. `src/client/paste.ts`：原样搬移粘贴拦截逻辑（`imageFilesOf`/`insertText`/`uploadOne`/verdict 缓存/监听安装），TS 化（类型化 event、明确返回 disposer）。
@@ -61,7 +61,7 @@ vision-plugin/
 | 风险 | 对策 |
 |---|---|
 | clientBundle 预设相对导入在外部仓库不可用 | 备选：本地复制精简预设（仅 external + CSS modules），约 120 行 |
-| client 类型链（references）在仓库外难以组装 | tsconfig.client.json 用 harness 的 paths 映射（同现有 tsconfig.json 手法）替代 project references |
+| client 类型链（references）在仓库外难以组装 | 用 `harness.paths.json` 的 paths 映射（同现有 tsconfig 手法）替代 project references；全部 `@deepseek-ai/*` 路径集中一处，换机器只改该文件 |
 | CSS Modules 需 lightningcss | harness node_modules 已含（1.32.0），tsdown 自动内联 |
 | 皮肤（maid-atelier）字体覆盖能力丢失 | 迁移后类名从 `dsh-vision-trigger` 变 CSS module hash，需保留选择器形态或加 `:global` 兼容层 |
 

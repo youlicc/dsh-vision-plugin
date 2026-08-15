@@ -74,6 +74,17 @@ A landed description appends to the session log, so later main-route requests in
 
 ## Development
 
+### Development-time dependency on the harness checkout
+
+The dsh packages this plugin consumes (`@deepseek-ai/dsh-llm`, `dsh-tools`, `dsh-attachment`, …) are **private and not installable from npm**. At **development time** (type checking, tests, builds) the toolchain therefore resolves them from a **local harness checkout that must sit at `../deepseek-harness` relative to this repo** (a sibling directory). This is a compile-time-only constraint:
+
+- `tsconfig.json` extends `../deepseek-harness/tsconfig.base.client.json` and pulls its `paths` from `./harness.paths.json`, which points every `@deepseek-ai/*` import at the sibling checkout's source or built `lib/types` declarations.
+- `vitest.config.ts` and `tsdown.config.ts` resolve the harness via the same `../deepseek-harness` relative path.
+
+**Runtime loading does NOT depend on this layout.** When dsh installs the plugin (into `$DSH_HOME/profiles/<name>/node_modules/`), the `@deepseek-ai/*` imports inside the built `lib/` resolve from dsh's own installation — the plugin ships no dsh dependencies (peerDependencies only) and runs anywhere dsh runs. The harness sibling requirement applies only to developing this repo.
+
+### Commands
+
 ```sh
 # Tests resolve the harness source tree via tsconfig paths (see vitest.config.ts)
 vitest run
@@ -85,7 +96,7 @@ tsc --noEmit
 tsdown
 ```
 
-The package's single tsconfig extends `deepseek-harness/tsconfig.base.client.json` (JSX + DOM lib) with node types restored for the host half; runtime/test resolution points vendored framework packages and react at the harness install (Vite alias) and dsh packages at their built `lib/types` declarations (tsconfig paths). Building requires the harness `node_modules` for the toolchain. The browser half is TypeScript + React under `src/client/`, compiled by the shared `clientBundle` preset from the harness (`lib/client.js`), with CSS Modules injected as `<style data-plugin>` tags at materialization.
+The package's single tsconfig extends `deepseek-harness/tsconfig.base.client.json` (JSX + DOM lib) with node types restored for the host half; runtime/test resolution points vendored framework packages and react at the harness install (Vite alias) and dsh packages at their built `lib/types` declarations (`harness.paths.json`). Building requires the harness `node_modules` for the toolchain. The browser half is TypeScript + React under `src/client/`, compiled by the shared `clientBundle` preset from the harness (`lib/client.js`), with CSS Modules injected as `<style data-plugin>` tags at materialization.
 
 ## Known Limitations and Deferred Work
 

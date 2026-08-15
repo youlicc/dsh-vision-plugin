@@ -40,6 +40,10 @@ pnpm dsh plugin --profile web add /path/to/dsh-vision-plugin/vision-plugin
 
 插件默认配置即开即用（不配置 provider/models 时由 composer 菜单选择免费视觉模型）；需要自定义时在插件配置面修改：
 
+### 开发依赖（编译期）
+
+**开发本插件仓库**（跑 `tsc` / `vitest` / `tsdown`）需要 `deepseek-harness` 检出位于本仓库的**兄弟目录**（`../deepseek-harness`），因为 dsh 包是私有未发布的、无法从 npm 安装，开发期类型/工具链从该检出解析。**安装与运行不依赖此布局**——`dsh plugin add` 装入 profile 后，`@deepseek-ai/*` 依赖由 dsh 自身安装提供。详见 `vision-plugin/README.md` 的 "Development" 一节。
+
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
 | `provider` | 缺省 | 视觉模型路由（任何已注册 llm 路由）；与 `models` 同时缺省时用菜单选择 |

@@ -36,10 +36,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-attachment": "file:../../deepseek-harness/packages/attachment/attachment",
-    "@deepseek-ai/dsh-host-webserver": "file:../../deepseek-harness/packages/host/webserver",
-    "@deepseek-ai/dsh-llm": "file:../../deepseek-harness/packages/llm/llm",
-    "@deepseek-ai/dsh-tools": "file:../../deepseek-harness/packages/core/tools",
     "@deepseek-ai/schemastery": "^3.18.1",
     "tsdown": "0.22.14",
     "vitest": "4.1.10"

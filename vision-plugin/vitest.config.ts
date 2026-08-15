@@ -1,7 +1,15 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
-import { standardDecoratorPlugin } from '../../deepseek-harness/vitest.shared.ts'
 
+// DEVELOPMENT CONSTRAINT: the harness checkout must sit at
+// `../deepseek-harness` relative to this repo (sibling directory) — the
+// HARNESS constant below and the tsconfig paths both resolve through that
+// relative location, because the dsh packages are private and not installable
+// from npm. See the package README "Development" section. Runtime loading
+// does NOT depend on this: dsh resolves @deepseek-ai/* from its own
+// installation. This config deliberately imports nothing from the harness —
+// the only harness dependency is resolving the @deepseek-ai/* sources these
+// aliases point at.
 const HARNESS = resolve(__dirname, '../../deepseek-harness')
 
 /**
@@ -55,8 +63,5 @@ export default defineConfig({
     tsconfigPaths: true,
     alias: [...VENDOR_ALIASES, ...BROWSER_ALIASES],
   },
-  // Harness sources use standard TypeScript decorators that need the shared
-  // transform plugin.
-  plugins: [standardDecoratorPlugin()],
   test: { include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'] },
 })

@@ -74,6 +74,17 @@
 
 ## 开发
 
+### 开发期对 harness 检出的依赖
+
+本插件消费的 dsh 包（`@deepseek-ai/dsh-llm`、`dsh-tools`、`dsh-attachment` 等）是**私有包，无法从 npm 安装**。**开发期**（类型检查、测试、构建）工具链因此从**本地 harness 检出**解析它们——该检出必须位于本仓库的**兄弟目录** `../deepseek-harness`。这只是编译期约束：
+
+- `tsconfig.json` 继承 `../deepseek-harness/tsconfig.base.client.json`，其 `paths` 来自 `./harness.paths.json`，把所有 `@deepseek-ai/*` import 指向兄弟检出的源码或构建后的 `lib/types` 声明。
+- `vitest.config.ts` 和 `tsdown.config.ts` 通过同样的 `../deepseek-harness` 相对路径解析 harness。
+
+**运行期加载不依赖此布局**。dsh 安装插件时（装入 `$DSH_HOME/profiles/<name>/node_modules/`），构建产物 `lib/` 内的 `@deepseek-ai/*` import 从 dsh 自身安装解析——插件不随附任何 dsh 依赖（仅 peerDependencies），可在任何装了 dsh 的机器上运行。兄弟目录要求只针对**开发本仓库**。
+
+### 命令
+
 ```sh
 # 测试通过 tsconfig paths 解析 harness 源码树（见 vitest.config.ts）
 vitest run
@@ -84,7 +95,7 @@ tsc --noEmit
 tsdown
 ```
 
-包的单一 tsconfig 继承 `deepseek-harness/tsconfig.base.client.json`（JSX + DOM lib），并为 host 半恢复 node types；运行时/测试解析把 vendored 框架包和 react 指向 harness 安装（Vite alias），把 dsh 包指向其已构建的 `lib/types` 声明（tsconfig paths）。构建需要 harness 的 `node_modules` 提供工具链。浏览器端是 `src/client/` 下的 TypeScript + React，由 harness 的共享 `clientBundle` 预设编译（`lib/client.js`），CSS Modules 在物化时以 `<style data-plugin>` 标签注入。
+包的单一 tsconfig 继承 `deepseek-harness/tsconfig.base.client.json`（JSX + DOM lib），并为 host 半恢复 node types；运行时/测试解析把 vendored 框架包和 react 指向 harness 安装（Vite alias），把 dsh 包指向其已构建的 `lib/types` 声明（`harness.paths.json`）。构建需要 harness 的 `node_modules` 提供工具链。浏览器端是 `src/client/` 下的 TypeScript + React，由 harness 的共享 `clientBundle` 预设编译（`lib/client.js`），CSS Modules 在物化时以 `<style data-plugin>` 标签注入。
 
 ## 已知限制与待办
 

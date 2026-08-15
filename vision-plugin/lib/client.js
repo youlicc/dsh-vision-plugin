@@ -200,19 +200,19 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var VisionMenu_module_css_default = {
+			"panel": "xImr3G_panel",
+			"trigger": "xImr3G_trigger",
+			"groupTitle": "xImr3G_groupTitle",
+			"error": "xImr3G_error",
+			"optionName": "xImr3G_optionName",
+			"triggerLabel": "xImr3G_triggerLabel",
+			"list": "xImr3G_list",
 			"option": "xImr3G_option",
 			"check": "xImr3G_check",
-			"root": "xImr3G_root",
-			"groupTitle": "xImr3G_groupTitle",
-			"trigger": "xImr3G_trigger",
-			"selected": "xImr3G_selected",
-			"optionName": "xImr3G_optionName",
 			"chevron": "xImr3G_chevron",
-			"list": "xImr3G_list",
-			"error": "xImr3G_error",
-			"panel": "xImr3G_panel",
-			"triggerLabel": "xImr3G_triggerLabel",
-			"status": "xImr3G_status"
+			"status": "xImr3G_status",
+			"root": "xImr3G_root",
+			"selected": "xImr3G_selected"
 		};
 		//#endregion
 		//#region src/client/VisionModelMenu.tsx
